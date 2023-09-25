@@ -1,0 +1,23 @@
+# Ignore VS Code settings folder
+.vscode
+
+# Pycache
+__pycache__
+
+# Ignore log files
+*.log
+
+# Slurm scripts and logs
+debug_slurm.sh
+run_slurm.sh
+submit_batch.py
+
+# Commands script
+commands.txt
+
+# Saved model checkpoints
+expri_save_models/
+
+# Pre-generated subgraphs and other data artifacts
+subgraphs_*/
+relation2id.json

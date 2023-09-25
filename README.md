@@ -1,3 +1,14 @@
+# RMPI Modified for Baseline Experiments
+
+## Change Log
+
+### Datasets
+
+Including the PediaTypes datasets for the doubly inductive link prediction task. Each subtask is structured as follows:
+
+The training dataset folder `<task>`, e.g., `DB2WD-15K-V2`, contains the file `train.txt` and `valid.txt`.
+The test dataset folder `<task>-ind`, e.g., `DB2WD-15K-V2`, contains the file `train.txt` and `test.txt`. 
+
 # RMPI
 
 Code and Data for the submission: "Relational Message Passing for Fully Inductive Knowledge Graph Completion".
