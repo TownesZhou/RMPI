@@ -5,6 +5,7 @@ import logging
 import pdb
 import numpy as np
 import time
+from tqdm import tqdm
 
 import torch
 import torch.nn as nn
@@ -52,7 +53,7 @@ class Trainer():
         dataloader = DataLoader(self.train_data, batch_size=self.params.batch_size, shuffle=True, num_workers=self.params.num_workers, collate_fn=self.params.collate_fn)
         self.graph_classifier.train()
         model_params = list(self.graph_classifier.parameters())
-        for b_idx, batch in enumerate(dataloader):
+        for b_idx, batch in enumerate(tqdm(dataloader)):
 
             data_pos, targets_pos, data_neg, targets_neg = self.params.move_batch_to_device(batch, self.params.device)
             self.optimizer.zero_grad()

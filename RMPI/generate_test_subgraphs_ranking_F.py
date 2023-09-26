@@ -82,14 +82,16 @@ def intialize_worker(model, adj_list, dgl_adj_list, id2entity, params):
     model_, adj_list_, dgl_adj_list_, id2entity_, params_ = model, adj_list, dgl_adj_list, id2entity, params
 
 
-def get_neg_samples_replacing_head_tail(test_links, adj_list, num_samples=50):
+def get_neg_samples_replacing_head_tail_rel(test_links, adj_list, num_samples=50):
 
     n, r = adj_list[0].shape[0], len(adj_list)
     heads, tails, rels = test_links[:, 0], test_links[:, 1], test_links[:, 2]
 
     neg_triplets = []
     for i, (head, tail, rel) in enumerate(zip(heads, tails, rels)):
-        neg_triplet = {'head': [[], 0], 'tail': [[], 0]}
+        # neg_triplet = {'head': [[], 0], 'tail': [[], 0]}
+        # Also sample negative relations
+        neg_triplet = {'head': [[], 0], 'tail': [[], 0], 'rel': [[], 0]}
         neg_triplet['head'][0].append([head, tail, rel])
         while len(neg_triplet['head'][0]) < num_samples:
             neg_head = head
@@ -106,9 +108,20 @@ def get_neg_samples_replacing_head_tail(test_links, adj_list, num_samples=50):
 
             if neg_head != neg_tail and adj_list[rel][neg_head, neg_tail] == 0:
                 neg_triplet['tail'][0].append([neg_head, neg_tail, rel])
+        
+        # Sample negative relations
+        neg_triplet['rel'][0].append([head, tail, rel])
+        while len(neg_triplet['rel'][0]) < num_samples:
+            neg_head = head
+            neg_tail = tail
+            neg_rel = np.random.choice(r)
+
+            if neg_rel != rel and adj_list[neg_rel][neg_head, neg_tail] == 0:
+                neg_triplet['rel'][0].append([neg_head, neg_tail, neg_rel])
 
         neg_triplet['head'][0] = np.array(neg_triplet['head'][0])
         neg_triplet['tail'][0] = np.array(neg_triplet['tail'][0])
+        neg_triplet['rel'][0] = np.array(neg_triplet['rel'][0])
 
         neg_triplets.append(neg_triplet)
 
@@ -473,12 +486,18 @@ def save_subgraphs_to_file(args):
     if tail_target_id != 10000:
         data_tail = get_subgraphs(tail_neg_links, adj_list_, dgl_adj_list_, params.max_label_value)
 
-    # Both data_head and data_tail are 3 tuples, each containing (batched_en_graph, batched_dis_graph, r_labels)
-    # Both batched_en_graph and batched_dis_graph are dgl batched graphs, each containing 
-    #   len(head_neg_links) graphs and len(tail_neg_links) graphs respectively.
-    # So, we use save_graphs() method to save the data to following 2 files under the "neg_subgraphs/" directory of the test dataset.
+    # Also generate negative relation data
+    rel_neg_links = neg_links['rel'][0]
+    rel_target_id = neg_links['rel'][1]
+
+    data_rel = get_subgraphs(rel_neg_links, adj_list_, dgl_adj_list_, params.max_label_value)
+
+    # data_head, data_tail, and data_rel are all 3 tuples, each containing (batched_en_graph, batched_dis_graph, r_labels)
+    # Both batched_en_graph and batched_dis_graph are dgl batched graphs, each containing len(head_neg_links) respectively.
+    # So, we use save_graphs() method to save the data to following 3 files under the "neg_subgraphs/" directory of the test dataset.
     #   data_head -> "run_{run_id}_link_{neg_link_id}_head.bin"
     #   data_tail -> "run_{run_id}_link_{neg_link_id}_tail.bin"
+    #   data_rel  -> "run_{run_id}_link_{neg_link_id}_rel.bin"
     # The first two elements of data needs to be unbatched and concatenated (as lists) before saving to file.
 
     path_to_save = os.path.join('data', params.dataset, 'neg_subgraphs')
@@ -498,6 +517,12 @@ def save_subgraphs_to_file(args):
         save_graphs(os.path.join(path_to_save, f'run_{run_id}_link_{neg_link_id}_tail.bin'), 
                     data_tail_0 + data_tail_1,
                     {'labels': data_tail[2]})
+
+    data_rel_0 = dgl.unbatch(data_rel[0])
+    data_rel_1 = dgl.unbatch(data_rel[1])
+    save_graphs(os.path.join(path_to_save, f'run_{run_id}_link_{neg_link_id}_rel.bin'),
+                data_rel_0 + data_rel_1,
+                {'labels': data_rel[2]})
 
     return run_id, neg_link_id
 
@@ -554,7 +579,7 @@ def main(params):
         model.rel_emb.weight.data = added_rel_emb.weight.data
 
         if params.mode == 'sample':
-            neg_triplets = get_neg_samples_replacing_head_tail(link_chunk, adj_list)
+            neg_triplets = get_neg_samples_replacing_head_tail_rel(link_chunk, adj_list)
             save_negative_triples_to_file(neg_triplets, id2entity, id2relation)
         elif params.mode == 'all':
             neg_triplets = get_neg_samples_replacing_head_tail_all(link_chunk, adj_list)

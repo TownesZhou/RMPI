@@ -12,6 +12,7 @@ slurm_logs/
 debug_slurm.sh
 run_slurm.sh
 submit_batch.py
+sweep_slurm.sh
 
 # Commands script
 commands.txt
