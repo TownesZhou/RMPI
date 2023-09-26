@@ -6,6 +6,7 @@ __pycache__
 
 # Ignore log files
 *.log
+slurm_logs/
 
 # Slurm scripts and logs
 debug_slurm.sh
@@ -14,6 +15,7 @@ submit_batch.py
 
 # Commands script
 commands.txt
+commands
 
 # Saved model checkpoints
 expri_save_models/
