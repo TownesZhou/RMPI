@@ -3,7 +3,16 @@ import logging
 import json
 import torch
 import hashlib
+from datetime import datetime
 
+def wandb_run_name(
+    run_hash: str,
+    stage_name: str,
+) -> str:
+    R"""
+    Create a run name for Weights & Biases.
+    """
+    return f"{run_hash} ({stage_name}) @ {datetime.now().strftime('%m%d%Y|%H:%M:%S')}"
 
 def create_hash(params_string: str) -> str:
     R"""

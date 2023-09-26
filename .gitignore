@@ -27,3 +27,7 @@ relation2id.json
 ranking_*.txt
 *debug*
 
+# Weights & Biases related
+wandb/
+sweep/
+

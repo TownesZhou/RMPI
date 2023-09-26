@@ -7,7 +7,7 @@ import numpy as np
 from scipy.sparse import SparseEfficiencyWarning
 
 from subgraph_extraction.datasets import SubgraphDataset, generate_subgraph_datasets
-from utils.initialization_utils import initialize_experiment, initialize_model
+from utils.initialization_utils import initialize_experiment, initialize_model, wandb_run_name
 from utils.graph_utils import collate_dgl, move_batch_to_device_dgl
 
 from model.dgl.graph_classifier import GraphClassifier as dgl_model
@@ -16,6 +16,8 @@ from managers.evaluator import Evaluator
 from managers.trainer import Trainer
 
 from warnings import simplefilter
+
+import wandb
 
 
 def main(params):
@@ -106,6 +108,12 @@ if __name__ == '__main__':
 
     parser.add_argument('--seed', default=41504, type=int, help='Seed for randomization')
 
+    # Support Weight & Biases logging
+    parser.add_argument("--wandb", action="store_true", help="Use Weights & Biases for logging")
+    parser.add_argument("--wandb-project", type=str, required=False, help="Weights & Biases project name")
+    parser.add_argument("--wandb-entity", type=str, required=False, help="Weights & Biases team name/account username")
+    parser.add_argument("--wandb-job-type", type=str, required=False, help="Weights & Biases job type")
+
     params = parser.parse_args()
     initialize_experiment(params)
 
@@ -125,5 +133,16 @@ if __name__ == '__main__':
 
     params.collate_fn = collate_dgl
     params.move_batch_to_device = move_batch_to_device_dgl
+
+    # Initialize Weights & Biases logging, and log the arguments for this run
+    run_config = vars(params)
+    run_config["stage"] = "fit"
+    wandb.init(mode="online" if params.wandb else "disabled",  # Turn on wandb logging only if --wandb is set
+            project=params.wandb_project,
+            entity=params.wandb_entity,
+            job_type=params.wandb_job_type,
+            config=run_config)
+    # Custom run name: run hash + model name + task/dataset name
+    wandb.run.name = wandb_run_name(params.run_hash, "fit")
 
     main(params)

@@ -15,9 +15,9 @@ For training: `RMPI/generate_train_subgraphs.py`.
 
 For testing, `RMPI/generate_test_subgraphs_ranking_F.py` is modified from `test_ranking_F.py` to generate the subgraphs use for model testing. Then, `RMPI/test_ranking_F_cache.py`, also modified from `test_ranking_F.py`, actually performs model testing on the pre-computed subgraphs.
 
-### Checkpoint paths
+### Integrate with Weights & Biases for loggin
 
-TODO
+See `RMPI/utils/initialization_utils.py` for additional utility functions and `RMPI/train.py` for additional logging code.
 
 ### Fix bug in model inference
 

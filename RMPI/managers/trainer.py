@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from sklearn import metrics
-
+import wandb
 
 class Trainer():
     def __init__(self, params, graph_classifier, train, valid_evaluator=None):
@@ -119,6 +119,8 @@ class Trainer():
 
             # time_elapsed = time.time() - time_start
             print(f'Epoch {epoch} with loss: {loss}, training auc_roc: {auc_roc}, training auc_pr: {auc_pr}, best validation AUC: {self.best_metric}')
+            wandb.log({'loss': loss, 'auc_roc': auc_roc, 'auc_pr': auc_pr, 'best_metric': self.best_metric, 'weight_norm': weight_norm})
+            
             if epoch % self.params.save_every == 0:
                 torch.save(self.graph_classifier, os.path.join(self.params.exp_dir, 'graph_classifier_chk.pth'))
 
