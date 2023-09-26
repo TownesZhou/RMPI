@@ -13,6 +13,8 @@ The test dataset folder `<task>-ind`, e.g., `DB2WD-15K-V2`, contains the file `t
 
 For training: `RMPI/generate_train_subgraphs.py`.
 
+For testing, `RMPI/generate_test_subgraphs_ranking_F.py` is modified from `test_ranking_F.py` to generate the subgraphs use for model testing. Then, `RMPI/test_ranking_F_cache.py`, also modified from `test_ranking_F.py`, actually performs model testing on the pre-computed subgraphs.
+
 ### Checkpoint paths
 
 TODO
