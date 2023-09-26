@@ -532,6 +532,13 @@ def main(params):
 
     adj_list, dgl_adj_list, triplets, entity2id, relation2id, id2entity, id2relation = process_files(params.file_paths, model.relation2id, add_traspose_rels=False)
 
+    # Split target links into n evenly sized chunks, and take the i-th chunk according to params
+    # Note that i starts from 1, and the last chunk may be larger than the rest
+    chunk_size = len(triplets['links']) // params.chunk_split[1]
+    start_idx = (params.chunk_split[0] - 1) * chunk_size
+    end_idx = start_idx + chunk_size if params.chunk_split[0] != params.chunk_split[1] else len(triplets['links'])
+    link_chunk = triplets['links'][start_idx:end_idx]
+
     new_rel_nums = len(relation2id.keys())
 
     for r in range(1, params.runs+1):
@@ -547,10 +554,10 @@ def main(params):
         model.rel_emb.weight.data = added_rel_emb.weight.data
 
         if params.mode == 'sample':
-            neg_triplets = get_neg_samples_replacing_head_tail(triplets['links'], adj_list)
+            neg_triplets = get_neg_samples_replacing_head_tail(link_chunk, adj_list)
             save_negative_triples_to_file(neg_triplets, id2entity, id2relation)
         elif params.mode == 'all':
-            neg_triplets = get_neg_samples_replacing_head_tail_all(triplets['links'], adj_list)
+            neg_triplets = get_neg_samples_replacing_head_tail_all(link_chunk, adj_list)
 
         func_args = [(r, i, neg_triplet) for i, neg_triplet in enumerate(neg_triplets)]
 
@@ -573,6 +580,9 @@ if __name__ == '__main__':
                         help="Negative sampling mode")
     parser.add_argument("--test_file", "-tf", type=str, default="test", help="Name of file containing test triplets")
     parser.add_argument("--num-workers", "-nw", type=int, default=8, help="Number of processes to spawn to save subgraphs")
+    parser.add_argument("--chunk-split", "-cs", type=str, default="1/1", 
+                        help="Which chunk of target triplets to compute subgraphs for. \
+                              i/n means the i-th chunk (start from 1) of a total of n roughly evenly sized chunks. Default: 1/1")
     parser.add_argument('--enclosing_sub_graph', '-en', type=bool, default=True, help='whether to only consider enclosing subgraph')
     parser.add_argument("--hop", type=int, default=2, help="How many hops to go while eextracting subgraphs?")
     parser.add_argument('--mapping', action='store_true', default=False, help='mapping')
@@ -592,6 +602,9 @@ if __name__ == '__main__':
 
     params.model_path = os.path.join('RMPI/expri_save_models', params.expri_name, 'best_graph_classifier.pth')
 
+    # Split chunks
+    chunk_split = params.chunk_split.split('/')
+    params.chunk_split = (int(chunk_split[0]), int(chunk_split[1]))  # i-th chunk of a total of n evenly sized chunks
 
     print('============ Params ============')
     print('\n'.join('%s: %s' % (k, str(v)) for k, v
