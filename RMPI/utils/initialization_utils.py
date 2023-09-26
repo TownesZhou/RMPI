@@ -2,18 +2,33 @@ import os
 import logging
 import json
 import torch
+import hashlib
+
+
+def create_hash(params_string: str) -> str:
+    R"""
+    Create hash from command line argument string. This is mainly for logging purposes.
+    """
+    hasher = hashlib.md5()
+    hasher.update(params_string.encode('utf-8'))
+    raw_hash =  hasher.hexdigest()
+    hash_str = "{}".format(raw_hash)[:8]
+    return hash_str
 
 
 def initialize_experiment(params):
     '''
     Makes the experiment directory, sets standard paths and initializes the logger
     '''
+    # Create run hash
+    params.run_hash = create_hash(str(vars(params)))
+
     params.main_dir = os.path.join(os.path.relpath(os.path.dirname(os.path.abspath(__file__))), '..')
     exps_dir = os.path.join(params.main_dir, 'expri_save_models')
     if not os.path.exists(exps_dir):
         os.makedirs(exps_dir)
 
-    params.exp_dir = os.path.join(exps_dir, params.expri_name)
+    params.exp_dir = os.path.join(exps_dir, params.expri_name, params.dataset, params.run_hash)
 
     if not os.path.exists(params.exp_dir):
         os.makedirs(params.exp_dir)

@@ -13,6 +13,20 @@ The test dataset folder `<task>-ind`, e.g., `DB2WD-15K-V2`, contains the file `t
 
 For training: `RMPI/generate_train_subgraphs.py`.
 
+### Checkpoint paths
+
+TODO
+
+### Fix bug in model inference
+
+See `RMPI/model/dgl/graph_classifier.py` line 225 for modification details.
+
+### Create run hash and modify model experiment directory
+
+Run hash is created from the given arguments and stored in `params.run_hash`. Experiment directory is changed to `params.exps_dir/params.expri_name/params.dataset/params.run_hash`
+
+See `RMPI/utils/initialization_utils.py` for modification details.
+
 # RMPI
 
 Code and Data for the submission: "Relational Message Passing for Fully Inductive Knowledge Graph Completion".

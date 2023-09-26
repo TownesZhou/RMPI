@@ -20,4 +20,8 @@ expri_save_models/
 
 # Pre-generated subgraphs and other data artifacts
 subgraphs_*/
+neg_subgraphs/
 relation2id.json
+ranking_*.txt
+*debug*
+
