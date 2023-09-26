@@ -222,6 +222,9 @@ class GraphClassifier(nn.Module):
 
         rel_edge_ids = [en_g.edge_id(head_ids[i], tail_ids[i]) for i in range(head_ids.shape[0])]
 
+        # Take only the first elements of each entry of rel_edge_ids, in case of multiple edges between the same pair of nodes
+        rel_edge_ids = [x[0] if isinstance(x, torch.Tensor) else x for x in rel_edge_ids]
+
         self.h1_extracted = self.h1[rel_edge_ids]
         self.rel_edge_ids = rel_edge_ids
         self.rel_edge_ids = rel_edge_ids
