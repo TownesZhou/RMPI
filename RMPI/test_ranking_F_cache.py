@@ -14,6 +14,10 @@ import numpy as np
 import dgl
 from dgl.data.utils import load_graphs
 import torch.nn as nn
+import wandb
+
+from utils.initialization_utils import wandb_run_name, create_hash
+
 def process_files(files, saved_relation2id, add_traspose_rels):
     '''
     files: Dictionary map of file paths to read the triplets from.
@@ -82,14 +86,16 @@ def intialize_worker(model, adj_list, dgl_adj_list, id2entity, params):
     model_, adj_list_, dgl_adj_list_, id2entity_, params_ = model, adj_list, dgl_adj_list, id2entity, params
 
 
-def get_neg_samples_replacing_head_tail(test_links, adj_list, num_samples=50):
+def get_neg_samples_replacing_head_tail_rel(test_links, adj_list, num_samples=50):
 
     n, r = adj_list[0].shape[0], len(adj_list)
     heads, tails, rels = test_links[:, 0], test_links[:, 1], test_links[:, 2]
 
     neg_triplets = []
     for i, (head, tail, rel) in enumerate(zip(heads, tails, rels)):
-        neg_triplet = {'head': [[], 0], 'tail': [[], 0]}
+        # neg_triplet = {'head': [[], 0], 'tail': [[], 0]}
+        # Also sample negative relations
+        neg_triplet = {'head': [[], 0], 'tail': [[], 0], 'rel': [[], 0]}
         neg_triplet['head'][0].append([head, tail, rel])
         while len(neg_triplet['head'][0]) < num_samples:
             neg_head = head
@@ -106,44 +112,55 @@ def get_neg_samples_replacing_head_tail(test_links, adj_list, num_samples=50):
 
             if neg_head != neg_tail and adj_list[rel][neg_head, neg_tail] == 0:
                 neg_triplet['tail'][0].append([neg_head, neg_tail, rel])
-
-        neg_triplet['head'][0] = np.array(neg_triplet['head'][0])
-        neg_triplet['tail'][0] = np.array(neg_triplet['tail'][0])
-
-        neg_triplets.append(neg_triplet)
-
-    return neg_triplets
-
-
-def get_neg_samples_replacing_head_tail_all(test_links, adj_list):
-
-    n, r = adj_list[0].shape[0], len(adj_list)
-    heads, tails, rels = test_links[:, 0], test_links[:, 1], test_links[:, 2]
-
-    neg_triplets = []
-    print('sampling negative triplets...')
-    for i, (head, tail, rel) in tqdm(enumerate(zip(heads, tails, rels)), total=len(heads)):
-        neg_triplet = {'head': [[], 0], 'tail': [[], 0]}
-        neg_triplet['head'][0].append([head, tail, rel])
-        for neg_tail in range(n):
+        
+        # Sample negative relations
+        neg_triplet['rel'][0].append([head, tail, rel])
+        while len(neg_triplet['rel'][0]) < num_samples:
             neg_head = head
-
-            if neg_head != neg_tail and adj_list[rel][neg_head, neg_tail] == 0:
-                neg_triplet['head'][0].append([neg_head, neg_tail, rel])
-
-        neg_triplet['tail'][0].append([head, tail, rel])
-        for neg_head in range(n):
             neg_tail = tail
+            neg_rel = np.random.choice(r)
 
-            if neg_head != neg_tail and adj_list[rel][neg_head, neg_tail] == 0:
-                neg_triplet['tail'][0].append([neg_head, neg_tail, rel])
+            if neg_rel != rel and adj_list[neg_rel][neg_head, neg_tail] == 0:
+                neg_triplet['rel'][0].append([neg_head, neg_tail, neg_rel])
 
         neg_triplet['head'][0] = np.array(neg_triplet['head'][0])
         neg_triplet['tail'][0] = np.array(neg_triplet['tail'][0])
+        neg_triplet['rel'][0] = np.array(neg_triplet['rel'][0])
 
         neg_triplets.append(neg_triplet)
 
     return neg_triplets
+
+
+# def get_neg_samples_replacing_head_tail_all(test_links, adj_list):
+
+#     n, r = adj_list[0].shape[0], len(adj_list)
+#     heads, tails, rels = test_links[:, 0], test_links[:, 1], test_links[:, 2]
+
+#     neg_triplets = []
+#     print('sampling negative triplets...')
+#     for i, (head, tail, rel) in tqdm(enumerate(zip(heads, tails, rels)), total=len(heads)):
+#         neg_triplet = {'head': [[], 0], 'tail': [[], 0]}
+#         neg_triplet['head'][0].append([head, tail, rel])
+#         for neg_tail in range(n):
+#             neg_head = head
+
+#             if neg_head != neg_tail and adj_list[rel][neg_head, neg_tail] == 0:
+#                 neg_triplet['head'][0].append([neg_head, neg_tail, rel])
+
+#         neg_triplet['tail'][0].append([head, tail, rel])
+#         for neg_head in range(n):
+#             neg_tail = tail
+
+#             if neg_head != neg_tail and adj_list[rel][neg_head, neg_tail] == 0:
+#                 neg_triplet['tail'][0].append([neg_head, neg_tail, rel])
+
+#         neg_triplet['head'][0] = np.array(neg_triplet['head'][0])
+#         neg_triplet['tail'][0] = np.array(neg_triplet['tail'][0])
+
+#         neg_triplets.append(neg_triplet)
+
+#     return neg_triplets
 
 
 # def get_neg_samples_replacing_head_tail_from_ruleN(ruleN_pred_path, entity2id, saved_relation2id):
@@ -437,9 +454,10 @@ def get_rank(args):
     run_id, neg_link_id, neg_links = args
 
     # Pre-computed subgraphs should have been saved under the "neg_subgraphs/" directory of the test dataset.
-    # For each run and each link, there should be two files corresponding to the following objects:
+    # For each run and each link, there should be THREE files corresponding to the following objects:
     #   "run_{run_id}_link_{neg_link_id}_head.bin" -> data_head
     #   "run_{run_id}_link_{neg_link_id}_tail.bin" -> data_tail
+    #   "run_{run_id}_link_{neg_link_id}_rel.bin" -> data_rel
     # Each of these files contain a concatenated list of subgraphs and their corresponding labels.
     # The first len(neg_links) subgraph should be batched together to create en_subgraphs
     # The other len(neg_links) subgraph should be batched together to create dis_subgraphs
@@ -502,7 +520,27 @@ def get_rank(args):
         tail_scores = np.array([])
         tail_rank = 10000
 
-    return head_scores, head_rank, tail_scores, tail_rank
+    # Also compute the rank for negative relations for relation prediction
+    rel_neg_links = neg_links['rel'][0]
+    rel_target_id = neg_links['rel'][1]
+
+    data_rel_path = os.path.join('data', params.dataset, 'neg_subgraphs', f'run_{run_id}_link_{neg_link_id}_rel.bin')
+    assert os.path.exists(data_rel_path), f'File containing pre-computed subgraphs not found! Expected {data_rel_path}.'
+    data_rel = load_graphs(data_rel_path)
+    # Check length
+    assert len(data_rel[0]) == len(rel_neg_links) * 2, \
+        f'Number of subgraphs loaded from {data_rel_path} does not match the number of links!'
+    # Batch the subgraphs
+    en_subgraphs = dgl.batch(data_rel[0][:len(rel_neg_links)])
+    dis_subgraphs = dgl.batch(data_rel[0][len(rel_neg_links):])
+    labels = data_rel[1]['labels']
+    # Pack into a 3-tuple
+    data = (en_subgraphs, dis_subgraphs, labels)
+
+    rel_scores = model_(data).squeeze(1).detach().numpy()
+    rel_rank = np.argwhere(np.argsort(rel_scores)[::-1] == rel_target_id) + 1
+
+    return head_scores, head_rank, tail_scores, tail_rank, rel_scores, rel_rank
 
 
 def save_negative_triples_to_file(neg_triplets, id2entity, id2relation):
@@ -541,6 +579,10 @@ def main(params):
     all_hit1 = []
     all_hit5 = []
     all_hit10 = []
+    all_mrr_rel = []
+    all_hit1_rel = []
+    all_hit5_rel = []
+    all_hit10_rel = []
     for r in range(1, params.runs+1):
         print(ori_rel_nums)
         print(new_rel_nums)
@@ -553,29 +595,34 @@ def main(params):
         #
         model.rel_emb.weight.data = added_rel_emb.weight.data
 
-        if params.mode == 'sample':
-            neg_triplets = get_neg_samples_replacing_head_tail(triplets['links'], adj_list)
-            save_negative_triples_to_file(neg_triplets, id2entity, id2relation)
-        elif params.mode == 'all':
-            neg_triplets = get_neg_samples_replacing_head_tail_all(triplets['links'], adj_list)
+        # if params.mode == 'sample':
+        #     neg_triplets = get_neg_samples_replacing_head_tail(triplets['links'], adj_list)
+        #     save_negative_triples_to_file(neg_triplets, id2entity, id2relation)
+        # elif params.mode == 'all':
+        #     neg_triplets = get_neg_samples_replacing_head_tail_all(triplets['links'], adj_list)
+
+        assert params.mode == 'sample', 'Only sample mode is supported for now!'
+        neg_triplets = get_neg_samples_replacing_head_tail_rel(triplets['links'], adj_list)
 
         ranks = []
+        rel_ranks = []
         all_head_scores = []
         all_tail_scores = []
+        all_rel_scores = []
 
         func_args = [(r, i, neg_triplet) for i, neg_triplet in enumerate(neg_triplets)]
         with mp.Pool(processes=params.num_workers, initializer=intialize_worker, initargs=(model, adj_list, dgl_adj_list, id2entity, params)) as p:
-            for head_scores, head_rank, tail_scores, tail_rank in tqdm(p.imap_unordered(get_rank, func_args), total=len(func_args)):
+            for head_scores, head_rank, tail_scores, tail_rank, rel_scores, rel_rank \
+                    in tqdm(p.imap_unordered(get_rank, func_args), total=len(func_args)):
                 ranks.append(head_rank)
                 ranks.append(tail_rank)
+                rel_ranks.append(rel_rank)
 
                 all_head_scores += head_scores.tolist()
                 all_tail_scores += tail_scores.tolist()
+                all_rel_scores += rel_scores.tolist()
 
-
-
-
-
+        # Entity prediction
         isHit1List = [x for x in ranks if x <= 1]
         isHit5List = [x for x in ranks if x <= 5]
         isHit10List = [x for x in ranks if x <= 10]
@@ -590,22 +637,66 @@ def main(params):
         all_hit5.append(hits_5)
         all_hit10.append(hits_10)
 
+        # Relation prediction
+        isHit1List_rel = [x for x in rel_ranks if x <= 1]
+        isHit5List_rel = [x for x in rel_ranks if x <= 5]
+        isHit10List_rel = [x for x in rel_ranks if x <= 10]
+        hits_1_rel = len(isHit1List_rel) / len(rel_ranks)
+        hits_5_rel = len(isHit5List_rel) / len(rel_ranks)
+        hits_10_rel = len(isHit10List_rel) / len(rel_ranks)
+
+        mrr_rel = np.mean(1 / np.array(rel_ranks))
+
+        all_mrr_rel.append(mrr_rel)
+        all_hit1_rel.append(hits_1_rel)
+        all_hit5_rel.append(hits_5_rel)
+        all_hit10_rel.append(hits_10_rel)
+
         # print(f'MRR | Hits@1 | Hits@5 | Hits@10 : {mrr} | {hits_1} | {hits_5} | {hits_10}')
+        print('======= Entity Prediction =======')
         print(f'MRR: {mrr: .4f}')
         print(f'Hits@1  : {hits_1: .4f}')
         print(f'Hits@5  : {hits_5: .4f}')
         print(f'Hits@10 : {hits_10: .4f}')
+        print('======= Relation Prediction =======')
+        print(f'MRR_rel: {mrr_rel: .4f}')
+        print(f'Hits@1_rel  : {hits_1_rel: .4f}')
+        print(f'Hits@5_rel  : {hits_5_rel: .4f}')
+        print(f'Hits@10_rel : {hits_10_rel: .4f}')
+
 
     avg_mrr = np.mean(all_mrr)
     avg_hit1 = np.mean(all_hit1)
     avg_hit5 = np.mean(all_hit5)
     avg_hit10 = np.mean(all_hit10)
 
-    print('\nAvg test Set Performance ')
+    avg_mrr_rel = np.mean(all_mrr_rel)
+    avg_hit1_rel = np.mean(all_hit1_rel)
+    avg_hit5_rel = np.mean(all_hit5_rel)
+    avg_hit10_rel = np.mean(all_hit10_rel)
+
+    print('\n======= Avg Entity Prediction Performance =======')
     print(f'MRR: {avg_mrr: .4f}')
     print(f'Hits@1  : {avg_hit1: .4f}')
     print(f'Hits@5  : {avg_hit5: .4f}')
     print(f'Hits@10 : {avg_hit10: .4f}')
+    print('======= Avg Relation Prediction Performance =======')
+    print(f'MRR_rel: {avg_mrr_rel: .4f}')
+    print(f'Hits@1_rel  : {avg_hit1_rel: .4f}')
+    print(f'Hits@5_rel  : {avg_hit5_rel: .4f}')
+    print(f'Hits@10_rel : {avg_hit10_rel: .4f}')
+
+    # Log the results to Weights & Biases
+    wandb.log({
+        "mrr_ent": avg_mrr,
+        "hit1_ent": avg_hit1,
+        "hit5_ent": avg_hit5,
+        "hit10_ent": avg_hit10,
+        "mrr_rel": avg_mrr_rel,
+        "hit1_rel": avg_hit1_rel,
+        "hit5_rel": avg_hit5_rel,
+        "hit10_rel": avg_hit10_rel
+    })
 
 if __name__ == '__main__':
 
@@ -619,7 +710,7 @@ if __name__ == '__main__':
     parser.add_argument("--dataset", "-d", type=str, default="FB237_v2", help="Path to dataset")
     parser.add_argument("--mode", "-m", type=str, default="sample", choices=["sample", "all", "ruleN"],
                         help="Negative sampling mode")
-    parser.add_argument("--num-workers", "-nw", type=int, default=8, help="Number of workers for multiprocessing")
+    parser.add_argument("--num_workers", "-nw", type=int, default=8, help="Number of workers for multiprocessing")
     parser.add_argument("--test_file", "-tf", type=str, default="test", help="Name of file containing test triplets")
     parser.add_argument('--enclosing_sub_graph', '-en', type=bool, default=True, help='whether to only consider enclosing subgraph')
     parser.add_argument("--hop", type=int, default=2, help="How many hops to go while eextracting subgraphs?")
@@ -629,6 +720,12 @@ if __name__ == '__main__':
     parser.add_argument('--target2nei_atten', action='store_true', help='apply target-aware attention for 2-hop neighbors')
     parser.add_argument('--conc', action='store_true', help='apply target-aware attention for 2-hop neighbors')
     parser.add_argument('--ablation', type=int, default=0, help='0,1 correspond to base, NE')
+
+    # Support Weight & Biases logging
+    parser.add_argument("--wandb", action="store_true", help="Use Weights & Biases for logging")
+    parser.add_argument("--wandb-project", type=str, required=False, help="Weights & Biases project name")
+    parser.add_argument("--wandb-entity", type=str, required=False, help="Weights & Biases team name/account username")
+    parser.add_argument("--wandb-job-type", type=str, required=False, help="Weights & Biases job type")
 
 
     params = parser.parse_args()
@@ -640,6 +737,17 @@ if __name__ == '__main__':
 
     params.model_path = os.path.join('RMPI/expri_save_models', params.expri_name, 'best_graph_classifier.pth')
 
+    # Initialize Weights & Biases logging, and log the arguments for this run
+    params.run_hash = create_hash(str(vars(params)))
+    run_config = vars(params)
+    run_config["stage"] = "fit"
+    wandb.init(mode="online" if params.wandb else "disabled",  # Turn on wandb logging only if --wandb is set
+            project=params.wandb_project,
+            entity=params.wandb_entity,
+            job_type=params.wandb_job_type,
+            config=run_config)
+    # Custom run name: run hash + model name + task/dataset name
+    wandb.run.name = wandb_run_name(params.run_hash, "transform")
 
     print('============ Params ============')
     print('\n'.join('%s: %s' % (k, str(v)) for k, v
