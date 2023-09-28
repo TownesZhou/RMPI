@@ -573,6 +573,15 @@ def main(params):
 
     adj_list, dgl_adj_list, triplets, entity2id, relation2id, id2entity, id2relation = process_files(params.file_paths, model.relation2id, add_traspose_rels=False)
 
+    # Split target links into n evenly sized chunks, and take the i-th chunk according to params
+    # Note that i starts from 1, and the last chunk may be larger than the rest
+    chunk_size = len(triplets['links']) // params.chunk_split[1]
+    start_idx = (params.chunk_split[0] - 1) * chunk_size
+    end_idx = start_idx + chunk_size if params.chunk_split[0] != params.chunk_split[1] else len(triplets['links'])
+    link_chunk = triplets['links'][start_idx:end_idx]
+
+    print(f"Chunk start index {start_idx} | end index {end_idx} | chunk size {chunk_size}")
+    
     new_rel_nums = len(relation2id.keys())
 
     all_mrr = []
@@ -602,7 +611,7 @@ def main(params):
         #     neg_triplets = get_neg_samples_replacing_head_tail_all(triplets['links'], adj_list)
 
         assert params.mode == 'sample', 'Only sample mode is supported for now!'
-        neg_triplets = get_neg_samples_replacing_head_tail_rel(triplets['links'], adj_list)
+        neg_triplets = get_neg_samples_replacing_head_tail_rel(link_chunk, adj_list)
 
         ranks = []
         rel_ranks = []
@@ -610,7 +619,8 @@ def main(params):
         all_tail_scores = []
         all_rel_scores = []
 
-        func_args = [(r, i, neg_triplet) for i, neg_triplet in enumerate(neg_triplets)]
+        func_args = [(r, i, neg_triplet) for i, neg_triplet in zip(range(start_idx, end_idx), neg_triplets)]
+
         with mp.Pool(processes=params.num_workers, initializer=intialize_worker, initargs=(model, adj_list, dgl_adj_list, id2entity, params)) as p:
             for head_scores, head_rank, tail_scores, tail_rank, rel_scores, rel_rank \
                     in tqdm(p.imap_unordered(get_rank, func_args), total=len(func_args)):
@@ -711,6 +721,9 @@ if __name__ == '__main__':
     parser.add_argument("--mode", "-m", type=str, default="sample", choices=["sample", "all", "ruleN"],
                         help="Negative sampling mode")
     parser.add_argument("--num_workers", "-nw", type=int, default=8, help="Number of workers for multiprocessing")
+    parser.add_argument("--chunk_split", "-cs", type=str, default="1/1", 
+                        help="Which chunk of target triplets to compute subgraphs for. \
+                              i/n means the i-th chunk (start from 1) of a total of n roughly evenly sized chunks. Default: 1/1")
     parser.add_argument("--test_file", "-tf", type=str, default="test", help="Name of file containing test triplets")
     parser.add_argument('--enclosing_sub_graph', '-en', type=bool, default=True, help='whether to only consider enclosing subgraph')
     parser.add_argument("--hop", type=int, default=2, help="How many hops to go while eextracting subgraphs?")
@@ -736,6 +749,11 @@ if __name__ == '__main__':
     }
 
     params.model_path = os.path.join('RMPI/expri_save_models', params.expri_name, 'best_graph_classifier.pth')
+
+    # Split chunks
+    chunk_split = params.chunk_split.split('/')
+    params.chunk_split = (int(chunk_split[0]), int(chunk_split[1]))  # i-th chunk of a total of n evenly sized chunks
+    print(f'Chunk split: {params.chunk_split[0]} / {params.chunk_split[1]}')
 
     # Initialize Weights & Biases logging, and log the arguments for this run
     params.run_hash = create_hash(str(vars(params)))
