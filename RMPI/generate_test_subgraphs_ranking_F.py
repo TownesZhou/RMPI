@@ -578,11 +578,16 @@ def main(params):
         #
         model.rel_emb.weight.data = added_rel_emb.weight.data
 
-        if params.mode == 'sample':
-            neg_triplets = get_neg_samples_replacing_head_tail_rel(link_chunk, adj_list)
-            save_negative_triples_to_file(neg_triplets, id2entity, id2relation)
-        elif params.mode == 'all':
-            neg_triplets = get_neg_samples_replacing_head_tail_all(link_chunk, adj_list)
+        # if params.mode == 'sample':
+        #     neg_triplets = get_neg_samples_replacing_head_tail_rel(link_chunk, adj_list)
+        #     save_negative_triples_to_file(neg_triplets, id2entity, id2relation)
+        # elif params.mode == 'all':
+        #     neg_triplets = get_neg_samples_replacing_head_tail_all(link_chunk, adj_list)
+
+        assert params.mode == 'sample', "Only sample mode is supported for now."
+
+        neg_triplets = get_neg_samples_replacing_head_tail_rel(link_chunk, adj_list)
+        save_negative_triples_to_file(neg_triplets, id2entity, id2relation)
 
         func_args = [(r, i, neg_triplet) for i, neg_triplet in enumerate(neg_triplets)]
 
